@@ -1,0 +1,131 @@
+import { useState, useRef, useEffect } from 'react'
+import { cn } from '@/lib/utils'
+import { Badge } from '@/components/ui/Badge'
+import { Avatar } from '@/components/ui/Avatar'
+import { useAnnotation } from '@/hooks/useAnnotation'
+import type { AnnotationKitProps } from '@/types'
+import { Bell } from 'lucide-react'
+
+export function NotificationEntry(props: AnnotationKitProps) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const annotation = useAnnotation(props)
+  const { unreadCount, annotations, markAsRead, markAllAsRead, locateAnnotation, users } = annotation
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  const unreadAnnotations = annotations.filter((a) =>
+    annotation.unreadIds.includes(a.id)
+  )
+
+  const notifications = unreadAnnotations.map((a) => {
+    const author = users.find((u) => u.id === a.createdBy)
+    return {
+      annotation: a,
+      authorName: author?.name || '未知用户',
+      type: a.comments.length > 0 ? 'new_comment' : 'new_annotation' as const,
+    }
+  })
+
+  const handleNotificationClick = (annotationId: string) => {
+    locateAnnotation(annotationId)
+    markAsRead(annotationId)
+    setOpen(false)
+  }
+
+  return (
+    <div ref={ref} className="relative inline-block">
+      <button
+        onClick={() => setOpen(!open)}
+        className={cn(
+          'relative p-2 rounded-lg transition-colors duration-150',
+          'text-slate-500 hover:text-slate-700 hover:bg-slate-100',
+          open && 'bg-slate-100 text-slate-700'
+        )}
+      >
+        <Bell className="w-5 h-5" />
+        <Badge count={unreadCount} className="absolute -top-0.5 -right-0.5" />
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full mt-2 w-80 bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+            <h3 className="text-[14px] font-semibold text-slate-900">通知</h3>
+            {unreadCount > 0 && (
+              <button
+                onClick={markAllAsRead}
+                className="text-[11px] text-blue-600 hover:text-blue-700 font-medium"
+              >
+                全部已读
+              </button>
+            )}
+          </div>
+
+          <div className="max-h-[360px] overflow-y-auto">
+            {notifications.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-10">
+                <Bell className="w-8 h-8 text-slate-200 mb-2" />
+                <p className="text-[13px] text-slate-400">没有未读通知</p>
+              </div>
+            ) : (
+              notifications.map(({ annotation: ann, authorName, type }) => (
+                <button
+                  key={ann.id}
+                  onClick={() => handleNotificationClick(ann.id)}
+                  className="w-full text-left flex items-start gap-3 px-4 py-3 hover:bg-slate-50 transition-colors border-b border-slate-50"
+                >
+                  <div
+                    className={cn(
+                      'w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5',
+                      type === 'new_annotation' ? 'bg-blue-100 text-blue-600' : 'bg-amber-100 text-amber-600'
+                    )}
+                  >
+                    <span className="text-xs font-bold">
+                      {type === 'new_annotation' ? '新' : '评'}
+                    </span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] text-slate-700 line-clamp-2">
+                      <span className="font-medium">{authorName}</span>
+                      {type === 'new_annotation' ? ' 添加了新批注' : ' 添加了新评论'}
+                    </p>
+                    <p className="text-[12px] text-slate-400 mt-0.5 line-clamp-1">
+                      {ann.content}
+                    </p>
+                    <span className="text-[11px] text-slate-300 mt-1">
+                      {formatTime(ann.createdAt)}
+                    </span>
+                  </div>
+                  <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0 mt-2" />
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function formatTime(dateStr: string): string {
+  const date = new Date(dateStr)
+  const now = new Date()
+  const diff = now.getTime() - date.getTime()
+  const mins = Math.floor(diff / 60000)
+  const hours = Math.floor(diff / 3600000)
+  const days = Math.floor(diff / 86400000)
+
+  if (mins < 1) return '刚刚'
+  if (mins < 60) return `${mins}分钟前`
+  if (hours < 24) return `${hours}小时前`
+  if (days < 7) return `${days}天前`
+  return date.toLocaleDateString('zh-CN')
+}
