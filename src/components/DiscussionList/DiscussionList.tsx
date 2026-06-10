@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { cn } from '@/lib/utils'
 import { Avatar } from '@/components/ui/Avatar'
 import { Button } from '@/components/ui/Button'
@@ -14,6 +14,7 @@ interface DiscussionListProps {
   users: User[]
   currentUser: User
   permissions: Permission
+  scrollToCommentId?: string
   className?: string
   onAddComment: (annotationId: string, content: string, parentId?: string, files?: File[], mentions?: string[]) => Promise<Comment>
   onEditComment: (commentId: string, content: string) => void
@@ -30,6 +31,7 @@ export function DiscussionList({
   users,
   currentUser,
   permissions,
+  scrollToCommentId,
   className,
   onAddComment,
   onEditComment,
@@ -45,6 +47,26 @@ export function DiscussionList({
   const [titleContent, setTitleContent] = useState(annotation.content)
   const [editingDueDate, setEditingDueDate] = useState(false)
   const [dueDateValue, setDueDateValue] = useState(annotation.dueDate?.slice(0, 10) || '')
+  const commentRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  const [highlightId, setHighlightId] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (scrollToCommentId) {
+      setExpanded(true)
+      setHighlightId(scrollToCommentId)
+      const timer = setTimeout(() => {
+        const el = commentRefs.current[scrollToCommentId]
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        }
+      }, 150)
+      const clearTimer = setTimeout(() => setHighlightId(null), 3000)
+      return () => {
+        clearTimeout(timer)
+        clearTimeout(clearTimer)
+      }
+    }
+  }, [scrollToCommentId])
 
   const author = users.find((u) => u.id === annotation.createdBy)
   const isOwnAnnotation = annotation.createdBy === currentUser.id
@@ -237,47 +259,63 @@ export function DiscussionList({
           {topLevelComments.map((comment) => {
             const replies = getReplies(comment.id)
             return (
-              <CommentCard
+              <div
                 key={comment.id}
-                comment={comment}
-                users={users}
-                currentUserId={currentUser.id}
-                isAdmin={permissions.isAdmin}
-                canEdit={permissions.canEdit}
-                canDelete={permissions.canDelete}
-                canCreate={permissions.canCreate}
-                canUpload={permissions.canUpload}
-                onReply={handleReply}
-                onQuote={handleQuote}
-                onEdit={onEditComment}
-                onDelete={onDeleteComment}
-              >
-                {replies.length > 0 && (
-                  <div className="ml-10 border-l-2 border-slate-200 pl-3 mt-1 space-y-0">
-                    {replies.map((reply) => {
-                      const parentComment = annotation.comments.find((c) => c.id === reply.parentId)
-                      return (
-                        <CommentCard
-                          key={reply.id}
-                          comment={reply}
-                          users={users}
-                          currentUserId={currentUser.id}
-                          isAdmin={permissions.isAdmin}
-                          canEdit={permissions.canEdit}
-                          canDelete={permissions.canDelete}
-                          canCreate={permissions.canCreate}
-                          canUpload={permissions.canUpload}
-                          onReply={handleReply}
-                          onQuote={handleQuote}
-                          onEdit={onEditComment}
-                          onDelete={onDeleteComment}
-                          parentComment={parentComment}
-                        />
-                      )
-                    })}
-                  </div>
+                ref={(el) => { commentRefs.current[comment.id] = el }}
+                className={cn(
+                  'rounded-lg transition-colors duration-500',
+                  highlightId === comment.id && 'bg-yellow-50'
                 )}
-              </CommentCard>
+              >
+                <CommentCard
+                  comment={comment}
+                  users={users}
+                  currentUserId={currentUser.id}
+                  isAdmin={permissions.isAdmin}
+                  canEdit={permissions.canEdit}
+                  canDelete={permissions.canDelete}
+                  canCreate={permissions.canCreate}
+                  canUpload={permissions.canUpload}
+                  onReply={handleReply}
+                  onQuote={handleQuote}
+                  onEdit={onEditComment}
+                  onDelete={onDeleteComment}
+                >
+                  {replies.length > 0 && (
+                    <div className="ml-10 border-l-2 border-slate-200 pl-3 mt-1 space-y-0">
+                      {replies.map((reply) => {
+                        const parentComment = annotation.comments.find((c) => c.id === reply.parentId)
+                        return (
+                          <div
+                            key={reply.id}
+                            ref={(el) => { commentRefs.current[reply.id] = el }}
+                            className={cn(
+                              'rounded-lg transition-colors duration-500',
+                              highlightId === reply.id && 'bg-yellow-50'
+                            )}
+                          >
+                            <CommentCard
+                              comment={reply}
+                              users={users}
+                              currentUserId={currentUser.id}
+                              isAdmin={permissions.isAdmin}
+                              canEdit={permissions.canEdit}
+                              canDelete={permissions.canDelete}
+                              canCreate={permissions.canCreate}
+                              canUpload={permissions.canUpload}
+                              onReply={handleReply}
+                              onQuote={handleQuote}
+                              onEdit={onEditComment}
+                              onDelete={onDeleteComment}
+                              parentComment={parentComment}
+                            />
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </CommentCard>
+              </div>
             )
           })}
         </div>

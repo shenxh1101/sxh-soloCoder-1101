@@ -15,6 +15,20 @@ interface CommentInputProps {
   users?: User[]
 }
 
+function parseMentions(content: string, users: User[]): string[] {
+  const matches = content.match(/@([\u4e00-\u9fa5a-zA-Z0-9_-]+)/g)
+  if (!matches) return []
+  const mentionedIds: string[] = []
+  for (const match of matches) {
+    const name = match.slice(1)
+    const user = users.find((u) => u.name === name)
+    if (user && !mentionedIds.includes(user.id)) {
+      mentionedIds.push(user.id)
+    }
+  }
+  return mentionedIds
+}
+
 export function CommentInput({
   onSubmit,
   onCancel,
@@ -27,7 +41,6 @@ export function CommentInput({
   const [content, setContent] = useState(initialContent)
   const [files, setFiles] = useState<File[]>([])
   const [mentioning, setMentioning] = useState<{ start: number; query: string } | null>(null)
-  const [mentions, setMentions] = useState<{ id: string; name: string }[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -56,10 +69,6 @@ export function CommentInput({
     const mentionText = `@${user.name} `
 
     setContent(before + mentionText + after)
-    setMentions((prev) => {
-      if (prev.find((m) => m.id === user.id)) return prev
-      return [...prev, { id: user.id, name: user.name }]
-    })
     setMentioning(null)
 
     setTimeout(() => {
@@ -80,11 +89,10 @@ export function CommentInput({
   const handleSubmit = () => {
     const trimmed = content.trim()
     if (!trimmed && files.length === 0) return
-    const mentionIds = mentions.map((m) => m.id)
+    const mentionIds = parseMentions(content, users)
     onSubmit(trimmed, files, mentionIds)
     setContent('')
     setFiles([])
-    setMentions([])
   }
 
   const handleKeyDown = (e: KeyboardEvent) => {

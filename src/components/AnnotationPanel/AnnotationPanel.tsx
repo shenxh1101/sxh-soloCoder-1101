@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { FilterBar } from './FilterBar'
 import { AnnotationListItem } from './AnnotationListItem'
 import { ExportButton } from './ExportButton'
@@ -38,13 +38,28 @@ export function AnnotationPanel(props: AnnotationKitProps) {
     currentUser,
     users,
     permissions,
+    navigateToComment,
+    setNavigateToComment,
   } = annotation
 
   const [activeAnnotation, setActiveAnnotation] = useState<string | null>(null)
   const [showDiscussion, setShowDiscussion] = useState(false)
+  const [scrollToCommentId, setScrollToCommentId] = useState<string | undefined>()
+
+  useEffect(() => {
+    if (navigateToComment) {
+      setActiveAnnotation(navigateToComment.annotationId)
+      setScrollToCommentId(navigateToComment.commentId)
+      setShowDiscussion(true)
+      locateAnnotation(navigateToComment.annotationId)
+      markAsRead(navigateToComment.annotationId)
+      setNavigateToComment(null)
+    }
+  }, [navigateToComment, setNavigateToComment, locateAnnotation, markAsRead])
 
   const handleItemClick = (ann: { id: string }) => {
     setActiveAnnotation(ann.id)
+    setScrollToCommentId(undefined)
     setShowDiscussion(true)
     locateAnnotation(ann.id)
     markAsRead(ann.id)
@@ -148,6 +163,7 @@ export function AnnotationPanel(props: AnnotationKitProps) {
             users={users}
             currentUser={currentUser}
             permissions={permissions}
+            scrollToCommentId={scrollToCommentId}
             onAddComment={async (annotationId, content, parentId, files, mentions) => {
               return await addComment(annotationId, { content, parentId, attachments: files, mentions })
             }}

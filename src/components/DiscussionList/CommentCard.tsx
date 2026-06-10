@@ -91,6 +91,7 @@ export function CommentCard({
           initialContent={comment.content}
           autoFocus
           users={users}
+          canUpload={canUpload}
         />
       </div>
     )

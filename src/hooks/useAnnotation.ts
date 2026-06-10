@@ -300,19 +300,22 @@ export function useAnnotation(props: AnnotationKitProps) {
   }, [store, filteredAnnotations])
 
   const getMentionNotifications = useCallback(
-    (): { annotationId: string; authorName: string; content: string; createdAt: string }[] => {
-      return filteredAnnotations.flatMap((a) =>
-        a.comments
-          .filter((c) => c.mentions?.includes(currentUser.id))
-          .map((c) => ({
-            annotationId: a.id,
-            authorName: getUserById(c.createdBy)?.name || '未知用户',
-            content: c.content,
-            createdAt: c.createdAt,
-          }))
-      )
+    (): { annotationId: string; commentId: string; authorName: string; content: string; createdAt: string }[] => {
+      return allAnnotations
+        .filter((a) => a.targetId === targetId)
+        .flatMap((a) =>
+          a.comments
+            .filter((c) => c.mentions?.includes(currentUser.id))
+            .map((c) => ({
+              annotationId: a.id,
+              commentId: c.id,
+              authorName: getUserById(c.createdBy)?.name || '未知用户',
+              content: c.content,
+              createdAt: c.createdAt,
+            }))
+        )
     },
-    [filteredAnnotations, currentUser.id, getUserById]
+    [allAnnotations, targetId, currentUser.id, getUserById]
   )
 
   const exportDiscussions = useCallback(
@@ -382,5 +385,7 @@ export function useAnnotation(props: AnnotationKitProps) {
     filterAssignee: store.filterAssignee,
     filterOverdue: store.filterOverdue,
     searchKeyword: store.searchKeyword,
+    navigateToComment: store.navigateToComment,
+    setNavigateToComment: store.setNavigateToComment,
   }
 }

@@ -16,6 +16,7 @@ export function NotificationEntry(props: AnnotationKitProps) {
     markAllAsRead,
     locateAnnotation,
     getMentionNotifications,
+    setNavigateToComment,
     users,
     targetId,
     unreadIds,
@@ -47,6 +48,7 @@ export function NotificationEntry(props: AnnotationKitProps) {
     return {
       id: a.id,
       annotationId: a.id,
+      commentId: null as string | null,
       authorName: author?.name || '未知用户',
       content: a.content,
       createdAt: a.createdAt,
@@ -58,9 +60,13 @@ export function NotificationEntry(props: AnnotationKitProps) {
 
   const targetUnreadCount = targetUnreadAnnotations.length + mentionNotifs.length
 
-  const handleNotificationClick = (annotationId: string) => {
-    locateAnnotation(annotationId)
-    markAsRead(annotationId)
+  const handleNotificationClick = (notif: typeof allNotifications[0]) => {
+    if (notif.type === 'mention' && notif.commentId) {
+      setNavigateToComment({ annotationId: notif.annotationId, commentId: notif.commentId })
+    } else {
+      locateAnnotation(notif.annotationId)
+    }
+    markAsRead(notif.annotationId)
     setOpen(false)
   }
 
@@ -102,7 +108,7 @@ export function NotificationEntry(props: AnnotationKitProps) {
               allNotifications.map((notif, i) => (
                 <button
                   key={`${notif.annotationId}_${notif.type}_${i}`}
-                  onClick={() => handleNotificationClick(notif.annotationId)}
+                  onClick={() => handleNotificationClick(notif)}
                   className="w-full text-left flex items-start gap-3 px-4 py-3 hover:bg-slate-50 transition-colors border-b border-slate-50"
                 >
                   <div

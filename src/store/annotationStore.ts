@@ -9,6 +9,7 @@ interface AnnotationState {
   filterAssignee: string | 'all'
   filterOverdue: boolean
   searchKeyword: string
+  navigateToComment: { annotationId: string; commentId: string } | null
 
   setAnnotations: (annotations: Annotation[]) => void
   addAnnotation: (annotation: Annotation) => void
@@ -26,6 +27,7 @@ interface AnnotationState {
   removeUnreadId: (id: string) => void
   clearUnreadIds: () => void
   clearUnreadIdsForTarget: (targetIds: string[]) => void
+  setNavigateToComment: (target: { annotationId: string; commentId: string } | null) => void
 }
 
 export const useAnnotationStore = create<AnnotationState>((set) => ({
@@ -36,6 +38,7 @@ export const useAnnotationStore = create<AnnotationState>((set) => ({
   filterAssignee: 'all',
   filterOverdue: false,
   searchKeyword: '',
+  navigateToComment: null,
 
   setAnnotations: (annotations) => set({ annotations }),
 
@@ -112,4 +115,6 @@ export const useAnnotationStore = create<AnnotationState>((set) => ({
     set((state) => ({
       unreadIds: state.unreadIds.filter((uid) => !annotationIds.includes(uid)),
     })),
+
+  setNavigateToComment: (target) => set({ navigateToComment: target }),
 }))
