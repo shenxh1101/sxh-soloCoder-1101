@@ -4,7 +4,8 @@ import { useAreaDrawing } from '@/hooks/useAreaDrawing'
 import { useAnnotation } from '@/hooks/useAnnotation'
 import type { AnnotationKitProps, CreateAnnotationData, Annotation, AreaRect } from '@/types'
 import { Modal } from '@/components/ui/Modal'
-import { CommentInput } from '@/components/DiscussionList/CommentInput'
+import { Button } from '@/components/ui/Button'
+import { Dropdown } from '@/components/ui/Dropdown'
 import { DiscussionList } from '@/components/DiscussionList/DiscussionList'
 
 interface AreaMarkerProps extends AnnotationKitProps {
@@ -15,7 +16,7 @@ interface AreaMarkerProps extends AnnotationKitProps {
 export function AreaMarker({ children, className, ...props }: AreaMarkerProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const annotation = useAnnotation(props)
-  const { permissions } = annotation
+  const { permissions, users } = annotation
   const { drawing, handleMouseDown, handleMouseMove, handleMouseUp } = useAreaDrawing({
     containerRef,
     enabled: permissions.canCreate,
@@ -25,6 +26,9 @@ export function AreaMarker({ children, className, ...props }: AreaMarkerProps) {
   const [showDiscussion, setShowDiscussion] = useState(false)
   const [showCreateInput, setShowCreateInput] = useState(false)
   const [pendingRect, setPendingRect] = useState<AreaRect | null>(null)
+  const [content, setContent] = useState('')
+  const [assignee, setAssignee] = useState('')
+  const [dueDate, setDueDate] = useState('')
 
   const onMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!permissions.canCreate) return
@@ -35,15 +39,20 @@ export function AreaMarker({ children, className, ...props }: AreaMarkerProps) {
     const rect = handleMouseUp()
     if (rect) {
       setPendingRect(rect)
+      setContent('')
+      setAssignee('')
+      setDueDate('')
       setShowCreateInput(true)
     }
   }
 
-  const handleCreateSubmit = (content: string, _files: File[]) => {
+  const handleCreateSubmit = () => {
     if (!content.trim() || !pendingRect) return
     const data: CreateAnnotationData = {
       content: content.trim(),
       areaRect: pendingRect,
+      assignee: assignee || undefined,
+      dueDate: dueDate ? new Date(dueDate).toISOString() : undefined,
     }
     annotation.createAnnotation(data)
     setShowCreateInput(false)
@@ -72,6 +81,11 @@ export function AreaMarker({ children, className, ...props }: AreaMarkerProps) {
   }
 
   const activeAnn = annotation.annotations.find((a) => a.id === activeAnnotationId)
+
+  const assigneeOptions = [
+    { label: '不指定', value: '' },
+    ...users.map((u) => ({ label: u.name, value: u.id })),
+  ]
 
   return (
     <>
@@ -139,19 +153,44 @@ export function AreaMarker({ children, className, ...props }: AreaMarkerProps) {
         title="添加区域批注"
         width="420px"
       >
-        <div className="p-4">
+        <div className="p-4 space-y-3">
           {pendingRect && (
-            <div className="mb-3 px-3 py-2 bg-blue-50 border-l-2 border-blue-300 rounded-r-md text-xs text-blue-700">
+            <div className="px-3 py-2 bg-blue-50 border-l-2 border-blue-300 rounded-r-md text-xs text-blue-700">
               已选择区域 ({(pendingRect.width).toFixed(1)}% &times; {(pendingRect.height).toFixed(1)}%)
             </div>
           )}
-          <CommentInput
-            onSubmit={handleCreateSubmit}
-            onCancel={handleCreateCancel}
+          <textarea
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
             placeholder="输入批注内容..."
             autoFocus
-            canUpload={false}
+            rows={2}
+            className="w-full resize-none rounded-lg border border-slate-200 px-3 py-2 text-[13px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-colors duration-150"
           />
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5 text-[13px] text-slate-500">
+              <span>处理人</span>
+              <Dropdown
+                options={assigneeOptions}
+                value={assignee}
+                placeholder="不指定"
+                onChange={setAssignee}
+              />
+            </div>
+            <div className="flex items-center gap-1.5 text-[13px] text-slate-500">
+              <span>截止日</span>
+              <input
+                type="date"
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+                className="border border-slate-200 rounded-md px-2 py-1.5 text-[13px] focus:outline-none focus:ring-1 focus:ring-blue-400"
+              />
+            </div>
+          </div>
+          <div className="flex items-center justify-end gap-2">
+            <Button variant="ghost" size="sm" onClick={handleCreateCancel}>取消</Button>
+            <Button variant="primary" size="sm" onClick={handleCreateSubmit} disabled={!content.trim()}>创建批注</Button>
+          </div>
         </div>
       </Modal>
 
@@ -167,16 +206,16 @@ export function AreaMarker({ children, className, ...props }: AreaMarkerProps) {
             users={annotation.users}
             currentUser={annotation.currentUser}
             permissions={annotation.permissions}
-            onAddComment={async (annotationId, content, parentId, files) => {
-              return await annotation.addComment(annotationId, { content, parentId, attachments: files })
+            onAddComment={async (annotationId, content, parentId, files, mentions) => {
+              return await annotation.addComment(annotationId, { content, parentId, attachments: files, mentions })
             }}
             onEditComment={annotation.updateComment}
             onDeleteComment={annotation.deleteComment}
             onToggleStatus={handleToggleStatus}
             onDeleteAnnotation={annotation.deleteAnnotation}
-            onEditAnnotation={(id, content) =>
-              annotation.updateAnnotation(id, { content })
-            }
+            onEditAnnotation={(id, content) => annotation.updateAnnotation(id, { content })}
+            onUpdateAssignee={(id, assignee) => annotation.updateAnnotation(id, { assignee: assignee || undefined })}
+            onUpdateDueDate={(id, dueDate) => annotation.updateAnnotation(id, { dueDate: dueDate || undefined })}
           />
         )}
       </Modal>

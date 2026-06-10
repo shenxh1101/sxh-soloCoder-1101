@@ -13,10 +13,12 @@ interface CommentCardProps {
   isAdmin: boolean
   canEdit: boolean
   canDelete: boolean
+  canCreate: boolean
+  canUpload: boolean
   children?: ReactNode
   parentComment?: CommentType
-  onReply: (commentId: string, content: string, files: File[]) => void
-  onQuote: (commentId: string, content: string, files: File[]) => void
+  onReply: (commentId: string, content: string, files: File[], mentions: string[]) => void
+  onQuote: (commentId: string, content: string, files: File[], mentions: string[]) => void
   onEdit: (commentId: string, content: string) => void
   onDelete: (commentId: string) => void
 }
@@ -28,6 +30,8 @@ export function CommentCard({
   isAdmin,
   canEdit,
   canDelete,
+  canCreate,
+  canUpload,
   children,
   parentComment,
   onReply,
@@ -43,19 +47,37 @@ export function CommentCard({
   const isOwn = comment.createdBy === currentUserId
   const canModify = isOwn ? (canEdit || canDelete) : isAdmin
 
-  const handleReply = (content: string, files: File[]) => {
-    onReply(comment.id, content, files)
+  const handleReply = (content: string, files: File[], mentions: string[]) => {
+    onReply(comment.id, content, files, mentions)
     setReplying(false)
   }
 
-  const handleQuote = (content: string, files: File[]) => {
-    onQuote(comment.id, content, files)
+  const handleQuote = (content: string, files: File[], mentions: string[]) => {
+    onQuote(comment.id, content, files, mentions)
     setQuoting(false)
   }
 
   const handleEdit = (content: string) => {
     onEdit(comment.id, content)
     setEditing(false)
+  }
+
+  const renderContent = (text: string) => {
+    const parts = text.split(/(@[\u4e00-\u9fa5a-zA-Z0-9_-]+)/g)
+    return parts.map((part, i) => {
+      if (part.startsWith('@') && part.length > 1) {
+        const name = part.slice(1)
+        const mentionedUser = users.find((u) => u.name === name)
+        if (mentionedUser) {
+          return (
+            <span key={i} className="text-blue-600 font-medium">
+              {part}
+            </span>
+          )
+        }
+      }
+      return <span key={i}>{part}</span>
+    })
   }
 
   const timeStr = formatTime(comment.createdAt)
@@ -68,6 +90,7 @@ export function CommentCard({
           onCancel={() => setEditing(false)}
           initialContent={comment.content}
           autoFocus
+          users={users}
         />
       </div>
     )
@@ -105,7 +128,7 @@ export function CommentCard({
           </div>
 
           <p className="text-[13px] text-slate-700 whitespace-pre-wrap break-words">
-            {comment.content}
+            {renderContent(comment.content)}
           </p>
 
           {comment.attachments.length > 0 && (
@@ -125,32 +148,34 @@ export function CommentCard({
             </div>
           )}
 
-          <div className="flex items-center gap-0.5 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-            <Button variant="ghost" size="sm" onClick={() => setReplying(true)}>
-              <MessageSquareReply className="w-3.5 h-3.5" />
-              回复
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => setQuoting(true)}>
-              <Quote className="w-3.5 h-3.5" />
-              引用
-            </Button>
-            {isOwn && canEdit && (
-              <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
-                <Pencil className="w-3.5 h-3.5" />
-                编辑
+          {canCreate && (
+            <div className="flex items-center gap-0.5 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+              <Button variant="ghost" size="sm" onClick={() => setReplying(true)}>
+                <MessageSquareReply className="w-3.5 h-3.5" />
+                回复
               </Button>
-            )}
-            {canModify && canDelete && (
-              <Button
-                variant="danger"
-                size="sm"
-                onClick={() => onDelete(comment.id)}
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                删除
+              <Button variant="ghost" size="sm" onClick={() => setQuoting(true)}>
+                <Quote className="w-3.5 h-3.5" />
+                引用
               </Button>
-            )}
-          </div>
+              {isOwn && canEdit && (
+                <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
+                  <Pencil className="w-3.5 h-3.5" />
+                  编辑
+                </Button>
+              )}
+              {canModify && canDelete && (
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={() => onDelete(comment.id)}
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  删除
+                </Button>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -161,7 +186,8 @@ export function CommentCard({
             onCancel={() => setReplying(false)}
             placeholder={`回复 ${author?.name || '...'}...`}
             autoFocus
-            canUpload={true}
+            canUpload={canUpload}
+            users={users}
           />
         </div>
       )}
@@ -178,7 +204,8 @@ export function CommentCard({
             onCancel={() => setQuoting(false)}
             placeholder="输入引用评论..."
             autoFocus
-            canUpload={true}
+            canUpload={canUpload}
+            users={users}
           />
         </div>
       )}

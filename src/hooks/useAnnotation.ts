@@ -9,6 +9,7 @@ import type {
   User,
   AnnotationStatus,
   Attachment,
+  StatusChange,
 } from '@/types'
 import { DEFAULT_PERMISSION } from '@/types'
 import { exportAsJson, exportAsCsv } from '@/utils/export'
@@ -56,6 +57,12 @@ export function useAnnotation(props: AnnotationKitProps) {
       if (a.targetId !== targetId) return false
       if (store.filterStatus !== 'all' && a.status !== store.filterStatus) return false
       if (store.filterUserIds.length > 0 && !store.filterUserIds.includes(a.createdBy)) return false
+      if (store.filterAssignee !== 'all' && a.assignee !== store.filterAssignee) return false
+      if (store.filterOverdue) {
+        if (!a.dueDate) return false
+        if (a.status === 'resolved') return false
+        if (new Date(a.dueDate) >= new Date()) return false
+      }
       if (store.searchKeyword) {
         const kw = store.searchKeyword.toLowerCase()
         const matchContent = a.content.toLowerCase().includes(kw)
@@ -115,6 +122,9 @@ export function useAnnotation(props: AnnotationKitProps) {
         createdBy: currentUser.id,
         createdAt: now,
         updatedAt: now,
+        assignee: data.assignee,
+        dueDate: data.dueDate,
+        statusHistory: [],
         textRange: data.textRange,
         areaRect: data.areaRect,
         comments: [],
@@ -145,20 +155,40 @@ export function useAnnotation(props: AnnotationKitProps) {
     [store, onAnnotationDelete]
   )
 
-  const resolveAnnotation = useCallback(
-    (id: string) => {
-      store.updateAnnotation(id, { status: 'resolved', updatedAt: new Date().toISOString() })
-      onAnnotationResolve?.(id)
+  const changeStatus = useCallback(
+    (id: string, newStatus: AnnotationStatus) => {
+      const ann = allAnnotations.find((a) => a.id === id)
+      if (!ann || ann.status === newStatus) return
+      const now = new Date().toISOString()
+      const record: StatusChange = {
+        from: ann.status,
+        to: newStatus,
+        changedBy: currentUser.id,
+        changedAt: now,
+      }
+      const updated = {
+        status: newStatus,
+        updatedAt: now,
+        statusHistory: [...(ann.statusHistory || []), record],
+      }
+      store.updateAnnotation(id, updated)
+      if (newStatus === 'resolved') {
+        onAnnotationResolve?.(id)
+      } else {
+        onAnnotationReopen?.(id)
+      }
     },
-    [store, onAnnotationResolve]
+    [allAnnotations, currentUser.id, store, onAnnotationResolve, onAnnotationReopen]
+  )
+
+  const resolveAnnotation = useCallback(
+    (id: string) => changeStatus(id, 'resolved'),
+    [changeStatus]
   )
 
   const reopenAnnotation = useCallback(
-    (id: string) => {
-      store.updateAnnotation(id, { status: 'pending', updatedAt: new Date().toISOString() })
-      onAnnotationReopen?.(id)
-    },
-    [store, onAnnotationReopen]
+    (id: string) => changeStatus(id, 'pending'),
+    [changeStatus]
   )
 
   const addComment = useCallback(
@@ -177,6 +207,7 @@ export function useAnnotation(props: AnnotationKitProps) {
         createdAt: now,
         updatedAt: now,
         attachments,
+        mentions: data.mentions,
       }
       store.addComment(annotationId, comment)
       onCommentAdd?.(annotationId, comment)
@@ -206,23 +237,27 @@ export function useAnnotation(props: AnnotationKitProps) {
   )
 
   const filterByStatus = useCallback(
-    (status: AnnotationStatus | 'all') => {
-      store.setFilterStatus(status)
-    },
+    (status: AnnotationStatus | 'all') => store.setFilterStatus(status),
     [store]
   )
 
   const filterByMember = useCallback(
-    (userIds: string[]) => {
-      store.setFilterUserIds(userIds)
-    },
+    (userIds: string[]) => store.setFilterUserIds(userIds),
+    [store]
+  )
+
+  const filterByAssignee = useCallback(
+    (assignee: string | 'all') => store.setFilterAssignee(assignee),
+    [store]
+  )
+
+  const filterByOverdue = useCallback(
+    (overdue: boolean) => store.setFilterOverdue(overdue),
     [store]
   )
 
   const searchAnnotations = useCallback(
-    (keyword: string) => {
-      store.setSearchKeyword(keyword)
-    },
+    (keyword: string) => store.setSearchKeyword(keyword),
     [store]
   )
 
@@ -255,9 +290,7 @@ export function useAnnotation(props: AnnotationKitProps) {
   )
 
   const markAsRead = useCallback(
-    (id: string) => {
-      store.removeUnreadId(id)
-    },
+    (id: string) => store.removeUnreadId(id),
     [store]
   )
 
@@ -266,12 +299,28 @@ export function useAnnotation(props: AnnotationKitProps) {
     store.clearUnreadIdsForTarget(targetAnnotationIds)
   }, [store, filteredAnnotations])
 
+  const getMentionNotifications = useCallback(
+    (): { annotationId: string; authorName: string; content: string; createdAt: string }[] => {
+      return filteredAnnotations.flatMap((a) =>
+        a.comments
+          .filter((c) => c.mentions?.includes(currentUser.id))
+          .map((c) => ({
+            annotationId: a.id,
+            authorName: getUserById(c.createdBy)?.name || '未知用户',
+            content: c.content,
+            createdAt: c.createdAt,
+          }))
+      )
+    },
+    [filteredAnnotations, currentUser.id, getUserById]
+  )
+
   const exportDiscussions = useCallback(
     (format: 'json' | 'csv') => {
       if (format === 'json') {
         exportAsJson(filteredAnnotations, targetId, users)
       } else {
-        exportAsCsv(filteredAnnotations, targetId)
+        exportAsCsv(filteredAnnotations, targetId, users)
       }
     },
     [filteredAnnotations, targetId, users]
@@ -279,9 +328,7 @@ export function useAnnotation(props: AnnotationKitProps) {
 
   const uploadAttachment = useCallback(
     async (file: File): Promise<string> => {
-      if (onAttachmentUpload) {
-        return await onAttachmentUpload(file)
-      }
+      if (onAttachmentUpload) return await onAttachmentUpload(file)
       return URL.createObjectURL(file)
     },
     [onAttachmentUpload]
@@ -316,10 +363,13 @@ export function useAnnotation(props: AnnotationKitProps) {
     deleteComment,
     filterByStatus,
     filterByMember,
+    filterByAssignee,
+    filterByOverdue,
     searchAnnotations,
     locateAnnotation,
     markAsRead,
     markAllAsRead,
+    getMentionNotifications,
     exportDiscussions,
     uploadAttachment,
     removeAttachment,
@@ -329,6 +379,8 @@ export function useAnnotation(props: AnnotationKitProps) {
     targetId,
     filterStatus: store.filterStatus,
     filterUserIds: store.filterUserIds,
+    filterAssignee: store.filterAssignee,
+    filterOverdue: store.filterOverdue,
     searchKeyword: store.searchKeyword,
   }
 }

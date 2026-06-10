@@ -2,15 +2,19 @@ import { cn } from '@/lib/utils'
 import { Dropdown } from '@/components/ui/Dropdown'
 import { Button } from '@/components/ui/Button'
 import type { AnnotationStatus, User } from '@/types'
-import { Search, X } from 'lucide-react'
+import { Search, X, Clock } from 'lucide-react'
 import { useState } from 'react'
 
 interface FilterBarProps {
   users: User[]
   filterStatus: AnnotationStatus | 'all'
   filterUserIds: string[]
+  filterAssignee: string | 'all'
+  filterOverdue: boolean
   onStatusChange: (status: AnnotationStatus | 'all') => void
   onUserChange: (userIds: string[]) => void
+  onAssigneeChange: (assignee: string | 'all') => void
+  onOverdueChange: (overdue: boolean) => void
   onSearch: (keyword: string) => void
 }
 
@@ -24,8 +28,12 @@ export function FilterBar({
   users,
   filterStatus,
   filterUserIds,
+  filterAssignee,
+  filterOverdue,
   onStatusChange,
   onUserChange,
+  onAssigneeChange,
+  onOverdueChange,
   onSearch,
 }: FilterBarProps) {
   const [searchValue, setSearchValue] = useState('')
@@ -35,6 +43,11 @@ export function FilterBar({
     onSearch(value)
   }
 
+  const assigneeOptions = [
+    { label: '全部处理人', value: 'all' },
+    ...users.map((u) => ({ label: u.name, value: u.id })),
+  ]
+
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
@@ -43,6 +56,24 @@ export function FilterBar({
           value={filterStatus}
           onChange={onStatusChange}
         />
+        <Dropdown
+          options={assigneeOptions}
+          value={filterAssignee}
+          placeholder="处理人"
+          onChange={onAssigneeChange}
+        />
+        <button
+          onClick={() => onOverdueChange(!filterOverdue)}
+          className={cn(
+            'flex items-center gap-1.5 px-3 py-1.5 text-[13px] rounded-md border transition-colors',
+            filterOverdue
+              ? 'bg-red-50 border-red-200 text-red-700'
+              : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-600'
+          )}
+        >
+          <Clock className="w-3.5 h-3.5" />
+          逾期
+        </button>
         <div className="relative flex-1">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
           <input

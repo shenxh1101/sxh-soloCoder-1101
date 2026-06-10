@@ -1,15 +1,18 @@
 import { useState, useRef, type KeyboardEvent } from 'react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/Button'
+import { Avatar } from '@/components/ui/Avatar'
+import type { User } from '@/types'
 import { Send, Paperclip } from 'lucide-react'
 
 interface CommentInputProps {
-  onSubmit: (content: string, files: File[]) => void
+  onSubmit: (content: string, files: File[], mentions: string[]) => void
   onCancel?: () => void
   placeholder?: string
   initialContent?: string
   autoFocus?: boolean
   canUpload?: boolean
+  users?: User[]
 }
 
 export function CommentInput({
@@ -19,21 +22,83 @@ export function CommentInput({
   initialContent = '',
   autoFocus = false,
   canUpload = true,
+  users = [],
 }: CommentInputProps) {
   const [content, setContent] = useState(initialContent)
   const [files, setFiles] = useState<File[]>([])
+  const [mentioning, setMentioning] = useState<{ start: number; query: string } | null>(null)
+  const [mentions, setMentions] = useState<{ id: string; name: string }[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  const handleContentChange = (value: string) => {
+    setContent(value)
+
+    const textarea = textareaRef.current
+    if (!textarea) return
+
+    const cursorPos = textarea.selectionStart
+    const textBeforeCursor = value.slice(0, cursorPos)
+    const atMatch = textBeforeCursor.match(/@([^\s@]*)$/)
+
+    if (atMatch) {
+      setMentioning({ start: cursorPos - atMatch[0].length, query: atMatch[1].toLowerCase() })
+    } else {
+      setMentioning(null)
+    }
+  }
+
+  const insertMention = (user: User) => {
+    if (!mentioning || !textareaRef.current) return
+
+    const before = content.slice(0, mentioning.start)
+    const after = content.slice(textareaRef.current.selectionStart)
+    const mentionText = `@${user.name} `
+
+    setContent(before + mentionText + after)
+    setMentions((prev) => {
+      if (prev.find((m) => m.id === user.id)) return prev
+      return [...prev, { id: user.id, name: user.name }]
+    })
+    setMentioning(null)
+
+    setTimeout(() => {
+      if (textareaRef.current) {
+        const newPos = mentioning.start + mentionText.length
+        textareaRef.current.focus()
+        textareaRef.current.setSelectionRange(newPos, newPos)
+      }
+    }, 0)
+  }
+
+  const filteredUsers = mentioning
+    ? users
+        .filter((u) => u.name.toLowerCase().includes(mentioning.query) || !mentioning.query)
+        .slice(0, 5)
+    : []
 
   const handleSubmit = () => {
     const trimmed = content.trim()
     if (!trimmed && files.length === 0) return
-    onSubmit(trimmed, files)
+    const mentionIds = mentions.map((m) => m.id)
+    onSubmit(trimmed, files, mentionIds)
     setContent('')
     setFiles([])
+    setMentions([])
   }
 
   const handleKeyDown = (e: KeyboardEvent) => {
+    if (mentioning && filteredUsers.length > 0) {
+      if (e.key === 'Enter') {
+        e.preventDefault()
+        insertMention(filteredUsers[0])
+        return
+      }
+      if (e.key === 'Escape') {
+        setMentioning(null)
+        return
+      }
+    }
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault()
       handleSubmit()
@@ -47,21 +112,41 @@ export function CommentInput({
 
   return (
     <div className="space-y-2">
-      <textarea
-        ref={textareaRef}
-        value={content}
-        onChange={(e) => setContent(e.target.value)}
-        onKeyDown={handleKeyDown}
-        placeholder={placeholder}
-        autoFocus={autoFocus}
-        rows={2}
-        className={cn(
-          'w-full resize-none rounded-lg border border-slate-200 px-3 py-2',
-          'text-[13px] text-slate-900 placeholder:text-slate-400',
-          'focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400',
-          'transition-colors duration-150'
+      <div className="relative">
+        <textarea
+          ref={textareaRef}
+          value={content}
+          onChange={(e) => handleContentChange(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder={placeholder}
+          autoFocus={autoFocus}
+          rows={2}
+          className={cn(
+            'w-full resize-none rounded-lg border border-slate-200 px-3 py-2',
+            'text-[13px] text-slate-900 placeholder:text-slate-400',
+            'focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400',
+            'transition-colors duration-150'
+          )}
+        />
+        {mentioning && users.length > 0 && (
+          <div className="absolute left-0 bottom-full mb-1 w-48 bg-white border border-slate-200 rounded-lg shadow-lg z-50 py-1 max-h-40 overflow-y-auto">
+            {filteredUsers.length === 0 ? (
+              <div className="px-3 py-2 text-[12px] text-slate-400">无匹配成员</div>
+            ) : (
+              filteredUsers.map((user) => (
+                <button
+                  key={user.id}
+                  onClick={() => insertMention(user)}
+                  className="w-full text-left flex items-center gap-2 px-3 py-1.5 hover:bg-slate-50 text-[13px] transition-colors"
+                >
+                  <Avatar user={user} size="sm" />
+                  <span className="text-slate-700">{user.name}</span>
+                </button>
+              ))
+            )}
+          </div>
         )}
-      />
+      </div>
       {files.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {files.map((file, i) => (

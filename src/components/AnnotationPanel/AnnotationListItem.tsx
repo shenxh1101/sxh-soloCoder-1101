@@ -2,7 +2,7 @@ import { cn } from '@/lib/utils'
 import { Avatar } from '@/components/ui/Avatar'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import type { Annotation, User } from '@/types'
-import { MessageCircle, MapPin, Type } from 'lucide-react'
+import { MessageCircle, MapPin, Type, UserCheck, Clock } from 'lucide-react'
 
 interface AnnotationListItemProps {
   annotation: Annotation
@@ -20,15 +20,16 @@ export function AnnotationListItem({
   onClick,
 }: AnnotationListItemProps) {
   const author = users.find((u) => u.id === annotation.createdBy)
+  const assignee = annotation.assignee ? users.find((u) => u.id === annotation.assignee) : null
   const commentCount = annotation.comments.length
 
-  const StatusBar = (
-    <div
-      className={cn(
-        'w-1 flex-shrink-0 rounded-full',
-        annotation.status === 'pending' ? 'bg-amber-400' : 'bg-emerald-400'
-      )}
-    />
+  const isOverdue = annotation.dueDate
+    && annotation.status === 'pending'
+    && new Date(annotation.dueDate) < new Date()
+
+  const statusColor = cn(
+    'w-1 flex-shrink-0 rounded-full',
+    annotation.status === 'pending' ? 'bg-amber-400' : 'bg-emerald-400'
   )
 
   return (
@@ -40,7 +41,7 @@ export function AnnotationListItem({
         isActive && 'bg-blue-50 hover:bg-blue-50'
       )}
     >
-      {StatusBar}
+      <div className={statusColor} />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 mb-1">
           <Avatar user={author || { name: '?', avatar: '' }} size="sm" />
@@ -48,6 +49,12 @@ export function AnnotationListItem({
             {author?.name || '未知用户'}
           </span>
           <StatusBadge status={annotation.status} clickable={false} />
+          {isOverdue && (
+            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-red-100 text-red-600 rounded-full text-[10px] font-medium">
+              <Clock className="w-2.5 h-2.5" />
+              逾期
+            </span>
+          )}
           {isUnread && (
             <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0 ml-auto" />
           )}
@@ -70,6 +77,18 @@ export function AnnotationListItem({
               区域标注
             </span>
           )}
+          {assignee && (
+            <span className="flex items-center gap-1 text-blue-500">
+              <UserCheck className="w-3 h-3" />
+              {assignee.name}
+            </span>
+          )}
+          {annotation.dueDate && (
+            <span className={cn('flex items-center gap-1', isOverdue && 'text-red-500')}>
+              <Clock className="w-3 h-3" />
+              {formatDate(annotation.dueDate)}
+            </span>
+          )}
           <span className="flex items-center gap-1">
             <MessageCircle className="w-3 h-3" />
             {commentCount}
@@ -79,6 +98,11 @@ export function AnnotationListItem({
       </div>
     </button>
   )
+}
+
+function formatDate(dateStr: string): string {
+  const d = new Date(dateStr)
+  return `${d.getMonth() + 1}/${d.getDate()}`
 }
 
 function formatTime(dateStr: string): string {

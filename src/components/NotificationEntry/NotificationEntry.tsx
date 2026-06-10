@@ -1,16 +1,25 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/Badge'
 import { Avatar } from '@/components/ui/Avatar'
 import { useAnnotation } from '@/hooks/useAnnotation'
 import type { AnnotationKitProps } from '@/types'
-import { Bell } from 'lucide-react'
+import { Bell, AtSign } from 'lucide-react'
 
 export function NotificationEntry(props: AnnotationKitProps) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const annotation = useAnnotation(props)
-  const { unreadCount, annotations, markAsRead, markAllAsRead, locateAnnotation, users, targetId, unreadIds } = annotation
+  const {
+    annotations,
+    markAsRead,
+    markAllAsRead,
+    locateAnnotation,
+    getMentionNotifications,
+    users,
+    targetId,
+    unreadIds,
+  } = annotation
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -26,16 +35,28 @@ export function NotificationEntry(props: AnnotationKitProps) {
     (a) => a.targetId === targetId && unreadIds.includes(a.id)
   )
 
-  const notifications = targetUnreadAnnotations.map((a) => {
+  const mentionNotifs = useMemo(() => {
+    return getMentionNotifications().map((m) => ({
+      ...m,
+      type: 'mention' as const,
+    }))
+  }, [getMentionNotifications])
+
+  const annotationNotifs = targetUnreadAnnotations.map((a) => {
     const author = users.find((u) => u.id === a.createdBy)
     return {
-      annotation: a,
+      id: a.id,
+      annotationId: a.id,
       authorName: author?.name || '未知用户',
-      type: a.comments.length > 0 ? 'new_comment' : 'new_annotation' as const,
+      content: a.content,
+      createdAt: a.createdAt,
+      type: (a.comments.length > 0 ? 'new_comment' : 'new_annotation') as 'new_annotation' | 'new_comment',
     }
   })
 
-  const targetUnreadCount = targetUnreadAnnotations.length
+  const allNotifications = [...mentionNotifs, ...annotationNotifs]
+
+  const targetUnreadCount = targetUnreadAnnotations.length + mentionNotifs.length
 
   const handleNotificationClick = (annotationId: string) => {
     locateAnnotation(annotationId)
@@ -72,38 +93,50 @@ export function NotificationEntry(props: AnnotationKitProps) {
           </div>
 
           <div className="max-h-[360px] overflow-y-auto">
-            {notifications.length === 0 ? (
+            {allNotifications.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-10">
                 <Bell className="w-8 h-8 text-slate-200 mb-2" />
                 <p className="text-[13px] text-slate-400">没有未读通知</p>
               </div>
             ) : (
-              notifications.map(({ annotation: ann, authorName, type }) => (
+              allNotifications.map((notif, i) => (
                 <button
-                  key={ann.id}
-                  onClick={() => handleNotificationClick(ann.id)}
+                  key={`${notif.annotationId}_${notif.type}_${i}`}
+                  onClick={() => handleNotificationClick(notif.annotationId)}
                   className="w-full text-left flex items-start gap-3 px-4 py-3 hover:bg-slate-50 transition-colors border-b border-slate-50"
                 >
                   <div
                     className={cn(
                       'w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5',
-                      type === 'new_annotation' ? 'bg-blue-100 text-blue-600' : 'bg-amber-100 text-amber-600'
+                      notif.type === 'mention'
+                        ? 'bg-purple-100 text-purple-600'
+                        : notif.type === 'new_comment'
+                        ? 'bg-amber-100 text-amber-600'
+                        : 'bg-blue-100 text-blue-600'
                     )}
                   >
-                    <span className="text-xs font-bold">
-                      {type === 'new_annotation' ? '新' : '评'}
-                    </span>
+                    {notif.type === 'mention' ? (
+                      <AtSign className="w-4 h-4" />
+                    ) : (
+                      <span className="text-xs font-bold">
+                        {notif.type === 'new_annotation' ? '新' : '评'}
+                      </span>
+                    )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-[13px] text-slate-700 line-clamp-2">
-                      <span className="font-medium">{authorName}</span>
-                      {type === 'new_annotation' ? ' 添加了新批注' : ' 添加了新评论'}
+                      <span className="font-medium">{notif.authorName}</span>
+                      {notif.type === 'mention'
+                        ? ' 在评论中提到了你'
+                        : notif.type === 'new_annotation'
+                        ? ' 添加了新批注'
+                        : ' 添加了新评论'}
                     </p>
                     <p className="text-[12px] text-slate-400 mt-0.5 line-clamp-1">
-                      {ann.content}
+                      {notif.content}
                     </p>
                     <span className="text-[11px] text-slate-300 mt-1">
-                      {formatTime(ann.createdAt)}
+                      {formatTime(notif.createdAt)}
                     </span>
                   </div>
                   <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0 mt-2" />

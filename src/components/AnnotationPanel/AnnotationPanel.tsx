@@ -16,9 +16,13 @@ export function AnnotationPanel(props: AnnotationKitProps) {
     unreadIds,
     filterStatus,
     filterUserIds,
+    filterAssignee,
+    filterOverdue,
     searchKeyword,
     filterByStatus,
     filterByMember,
+    filterByAssignee,
+    filterByOverdue,
     searchAnnotations,
     addComment,
     updateComment,
@@ -86,8 +90,12 @@ export function AnnotationPanel(props: AnnotationKitProps) {
             users={users}
             filterStatus={filterStatus}
             filterUserIds={filterUserIds}
+            filterAssignee={filterAssignee}
+            filterOverdue={filterOverdue}
             onStatusChange={filterByStatus}
             onUserChange={filterByMember}
+            onAssigneeChange={filterByAssignee}
+            onOverdueChange={filterByOverdue}
             onSearch={searchAnnotations}
           />
         </div>
@@ -97,7 +105,7 @@ export function AnnotationPanel(props: AnnotationKitProps) {
             <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
               <MessageSquareText className="w-8 h-8 text-slate-300 mb-3" />
               <p className="text-[13px] text-slate-400">
-                {searchKeyword || filterStatus !== 'all' || filterUserIds.length > 0
+                {searchKeyword || filterStatus !== 'all' || filterUserIds.length > 0 || filterAssignee !== 'all' || filterOverdue
                   ? '没有匹配的批注'
                   : '暂无批注'}
               </p>
@@ -140,14 +148,16 @@ export function AnnotationPanel(props: AnnotationKitProps) {
             users={users}
             currentUser={currentUser}
             permissions={permissions}
-            onAddComment={async (annotationId, content, parentId, files) => {
-              return await addComment(annotationId, { content, parentId, attachments: files })
+            onAddComment={async (annotationId, content, parentId, files, mentions) => {
+              return await addComment(annotationId, { content, parentId, attachments: files, mentions })
             }}
             onEditComment={updateComment}
             onDeleteComment={deleteComment}
             onToggleStatus={handleToggleStatus}
             onDeleteAnnotation={deleteAnnotation}
             onEditAnnotation={(id, content) => updateAnnotation(id, { content })}
+            onUpdateAssignee={(id, assignee) => updateAnnotation(id, { assignee: assignee || undefined })}
+            onUpdateDueDate={(id, dueDate) => updateAnnotation(id, { dueDate: dueDate || undefined })}
           />
         )}
       </Modal>

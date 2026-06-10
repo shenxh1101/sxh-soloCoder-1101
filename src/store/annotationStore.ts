@@ -6,6 +6,8 @@ interface AnnotationState {
   unreadIds: string[]
   filterStatus: AnnotationStatus | 'all'
   filterUserIds: string[]
+  filterAssignee: string | 'all'
+  filterOverdue: boolean
   searchKeyword: string
 
   setAnnotations: (annotations: Annotation[]) => void
@@ -17,6 +19,8 @@ interface AnnotationState {
   removeComment: (commentId: string) => void
   setFilterStatus: (status: AnnotationStatus | 'all') => void
   setFilterUserIds: (userIds: string[]) => void
+  setFilterAssignee: (assignee: string | 'all') => void
+  setFilterOverdue: (overdue: boolean) => void
   setSearchKeyword: (keyword: string) => void
   addUnreadId: (id: string) => void
   removeUnreadId: (id: string) => void
@@ -29,6 +33,8 @@ export const useAnnotationStore = create<AnnotationState>((set) => ({
   unreadIds: [],
   filterStatus: 'all',
   filterUserIds: [],
+  filterAssignee: 'all',
+  filterOverdue: false,
   searchKeyword: '',
 
   setAnnotations: (annotations) => set({ annotations }),
@@ -84,6 +90,8 @@ export const useAnnotationStore = create<AnnotationState>((set) => ({
 
   setFilterStatus: (status) => set({ filterStatus: status }),
   setFilterUserIds: (userIds) => set({ filterUserIds: userIds }),
+  setFilterAssignee: (assignee) => set({ filterAssignee: assignee }),
+  setFilterOverdue: (overdue) => set({ filterOverdue: overdue }),
   setSearchKeyword: (keyword) => set({ searchKeyword: keyword }),
 
   addUnreadId: (id) =>

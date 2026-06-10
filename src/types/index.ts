@@ -29,6 +29,13 @@ export interface Attachment {
 
 export type AnnotationStatus = 'pending' | 'resolved'
 
+export interface StatusChange {
+  from: AnnotationStatus
+  to: AnnotationStatus
+  changedBy: string
+  changedAt: string
+}
+
 export interface Comment {
   id: string
   annotationId: string
@@ -38,6 +45,7 @@ export interface Comment {
   createdAt: string
   updatedAt: string
   attachments: Attachment[]
+  mentions?: string[]
 }
 
 export interface Annotation {
@@ -49,6 +57,9 @@ export interface Annotation {
   createdBy: string
   createdAt: string
   updatedAt: string
+  assignee?: string
+  dueDate?: string
+  statusHistory: StatusChange[]
   textRange?: TextRange
   areaRect?: AreaRect
   comments: Comment[]
@@ -68,7 +79,7 @@ export interface Permission {
 export interface Notification {
   id: string
   annotationId: string
-  type: 'new_annotation' | 'new_comment' | 'status_change'
+  type: 'new_annotation' | 'new_comment' | 'status_change' | 'mention'
   message: string
   createdBy: string
   createdAt: string
@@ -80,12 +91,15 @@ export interface CreateAnnotationData {
   textRange?: TextRange
   areaRect?: AreaRect
   attachments?: File[]
+  assignee?: string
+  dueDate?: string
 }
 
 export interface CreateCommentData {
   content: string
   parentId?: string
   attachments?: File[]
+  mentions?: string[]
 }
 
 export interface AnnotationKitProps {

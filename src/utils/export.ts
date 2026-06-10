@@ -8,9 +8,17 @@ function formatAnnotationForExport(annotation: Annotation, users: User[]) {
   return {
     id: annotation.id,
     content: annotation.content,
-    status: annotation.status,
+    status: annotation.status === 'pending' ? '待处理' : '已解决',
     createdBy: findUserName(annotation.createdBy, users),
     createdAt: annotation.createdAt,
+    assignee: annotation.assignee ? findUserName(annotation.assignee, users) : null,
+    dueDate: annotation.dueDate || null,
+    statusHistory: (annotation.statusHistory || []).map((r) => ({
+      from: r.from === 'pending' ? '待处理' : '已解决',
+      to: r.to === 'pending' ? '待处理' : '已解决',
+      changedBy: findUserName(r.changedBy, users),
+      changedAt: r.changedAt,
+    })),
     comments: annotation.comments.map((c) => ({
       id: c.id,
       content: c.content,
@@ -18,6 +26,7 @@ function formatAnnotationForExport(annotation: Annotation, users: User[]) {
       createdAt: c.createdAt,
       parentId: c.parentId || null,
       parentComment: annotation.comments.find((p) => p.id === c.parentId)?.content || null,
+      mentions: (c.mentions || []).map((m) => findUserName(m, users)),
       attachments: c.attachments.map((a) => ({ name: a.name, url: a.url })),
     })),
   }
@@ -35,9 +44,9 @@ export function exportAsJson(annotations: Annotation[], targetId: string, users:
   downloadBlob(blob, `annotations-${targetId}-${Date.now()}.json`)
 }
 
-export function exportAsCsv(annotations: Annotation[], targetId: string) {
+export function exportAsCsv(annotations: Annotation[], targetId: string, users: User[]) {
   const rows: string[][] = [
-    ['批注ID', '内容', '状态', '创建者', '创建时间', '评论数', '评论详情'],
+    ['批注ID', '内容', '状态', '创建者', '处理人', '截止日', '创建时间', '评论数', '状态变更次数', '评论详情'],
   ]
 
   annotations.forEach((a) => {
@@ -46,16 +55,22 @@ export function exportAsCsv(annotations: Annotation[], targetId: string) {
         const parentInfo = c.parentId
           ? `(回复 #${a.comments.findIndex((p) => p.id === c.parentId) + 1}) `
           : ''
-        return `#${i + 1} ${parentInfo}${c.createdBy}: ${c.content.slice(0, 50)}`
+        const mentionInfo = c.mentions?.length
+          ? ` @${c.mentions.map((m) => findUserName(m, users)).join(', ')}`
+          : ''
+        return `#${i + 1} ${parentInfo}${c.createdBy}: ${c.content.slice(0, 50)}${mentionInfo}`
       })
       .join(' | ')
     rows.push([
       a.id,
       a.content,
       a.status === 'pending' ? '待处理' : '已解决',
-      a.createdBy,
+      findUserName(a.createdBy, users),
+      a.assignee ? findUserName(a.assignee, users) : '',
+      a.dueDate ? new Date(a.dueDate).toLocaleDateString('zh-CN') : '',
       a.createdAt,
       String(a.comments.length),
+      String((a.statusHistory || []).length),
       commentDetails,
     ])
   })
