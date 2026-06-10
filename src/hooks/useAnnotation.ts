@@ -8,6 +8,7 @@ import type {
   Comment,
   User,
   AnnotationStatus,
+  Attachment,
 } from '@/types'
 import { DEFAULT_PERMISSION } from '@/types'
 import { exportAsJson, exportAsCsv } from '@/utils/export'
@@ -63,6 +64,44 @@ export function useAnnotation(props: AnnotationKitProps) {
       }
       return true
     })
+
+  const processAttachments = useCallback(
+    async (files: File[]): Promise<Attachment[]> => {
+      const results: Attachment[] = []
+      for (const file of files) {
+        if (onAttachmentUpload) {
+          try {
+            const url = await onAttachmentUpload(file)
+            results.push({
+              id: generateId(),
+              url,
+              name: file.name,
+              type: file.type,
+              size: file.size,
+            })
+          } catch {
+            results.push({
+              id: generateId(),
+              url: URL.createObjectURL(file),
+              name: file.name,
+              type: file.type,
+              size: file.size,
+            })
+          }
+        } else {
+          results.push({
+            id: generateId(),
+            url: URL.createObjectURL(file),
+            name: file.name,
+            type: file.type,
+            size: file.size,
+          })
+        }
+      }
+      return results
+    },
+    [onAttachmentUpload]
+  )
 
   const createAnnotation = useCallback(
     (data: CreateAnnotationData) => {
@@ -123,8 +162,12 @@ export function useAnnotation(props: AnnotationKitProps) {
   )
 
   const addComment = useCallback(
-    (annotationId: string, data: CreateCommentData) => {
+    async (annotationId: string, data: CreateCommentData): Promise<Comment> => {
       const now = new Date().toISOString()
+      const attachments = data.attachments
+        ? await processAttachments(data.attachments)
+        : []
+
       const comment: Comment = {
         id: generateId(),
         annotationId,
@@ -133,13 +176,13 @@ export function useAnnotation(props: AnnotationKitProps) {
         createdBy: currentUser.id,
         createdAt: now,
         updatedAt: now,
-        attachments: [],
+        attachments,
       }
       store.addComment(annotationId, comment)
       onCommentAdd?.(annotationId, comment)
       return comment
     },
-    [currentUser.id, store, onCommentAdd]
+    [currentUser.id, store, onCommentAdd, processAttachments]
   )
 
   const updateComment = useCallback(
@@ -219,25 +262,27 @@ export function useAnnotation(props: AnnotationKitProps) {
   )
 
   const markAllAsRead = useCallback(() => {
-    store.clearUnreadIds()
-  }, [store])
+    const targetAnnotationIds = filteredAnnotations.map((a) => a.id)
+    store.clearUnreadIdsForTarget(targetAnnotationIds)
+  }, [store, filteredAnnotations])
 
   const exportDiscussions = useCallback(
     (format: 'json' | 'csv') => {
       if (format === 'json') {
-        exportAsJson(filteredAnnotations, targetId)
+        exportAsJson(filteredAnnotations, targetId, users)
       } else {
         exportAsCsv(filteredAnnotations, targetId)
       }
     },
-    [filteredAnnotations, targetId]
+    [filteredAnnotations, targetId, users]
   )
 
   const uploadAttachment = useCallback(
-    async (annotationId: string, file: File): Promise<void> => {
+    async (file: File): Promise<string> => {
       if (onAttachmentUpload) {
-        await onAttachmentUpload(file)
+        return await onAttachmentUpload(file)
       }
+      return URL.createObjectURL(file)
     },
     [onAttachmentUpload]
   )

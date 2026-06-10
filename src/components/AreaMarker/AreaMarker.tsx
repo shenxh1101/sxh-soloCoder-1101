@@ -2,41 +2,62 @@ import { useRef, useState, type ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 import { useAreaDrawing } from '@/hooks/useAreaDrawing'
 import { useAnnotation } from '@/hooks/useAnnotation'
-import type { AnnotationKitProps, CreateAnnotationData, Annotation } from '@/types'
+import type { AnnotationKitProps, CreateAnnotationData, Annotation, AreaRect } from '@/types'
 import { Modal } from '@/components/ui/Modal'
+import { CommentInput } from '@/components/DiscussionList/CommentInput'
 import { DiscussionList } from '@/components/DiscussionList/DiscussionList'
 
 interface AreaMarkerProps extends AnnotationKitProps {
   children: ReactNode
-  enabled?: boolean
   className?: string
 }
 
-export function AreaMarker({ children, enabled = true, className, ...props }: AreaMarkerProps) {
+export function AreaMarker({ children, className, ...props }: AreaMarkerProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const annotation = useAnnotation(props)
+  const { permissions } = annotation
   const { drawing, handleMouseDown, handleMouseMove, handleMouseUp } = useAreaDrawing({
     containerRef,
-    enabled,
+    enabled: permissions.canCreate,
   })
 
   const [activeAnnotationId, setActiveAnnotationId] = useState<string | null>(null)
-  const [showModal, setShowModal] = useState(false)
+  const [showDiscussion, setShowDiscussion] = useState(false)
+  const [showCreateInput, setShowCreateInput] = useState(false)
+  const [pendingRect, setPendingRect] = useState<AreaRect | null>(null)
+
+  const onMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!permissions.canCreate) return
+    handleMouseDown(e)
+  }
 
   const onMouseUp = () => {
     const rect = handleMouseUp()
     if (rect) {
-      const data: CreateAnnotationData = {
-        content: '',
-        areaRect: rect,
-      }
-      annotation.createAnnotation(data)
+      setPendingRect(rect)
+      setShowCreateInput(true)
     }
+  }
+
+  const handleCreateSubmit = (content: string, _files: File[]) => {
+    if (!content.trim() || !pendingRect) return
+    const data: CreateAnnotationData = {
+      content: content.trim(),
+      areaRect: pendingRect,
+    }
+    annotation.createAnnotation(data)
+    setShowCreateInput(false)
+    setPendingRect(null)
+  }
+
+  const handleCreateCancel = () => {
+    setShowCreateInput(false)
+    setPendingRect(null)
   }
 
   const handleMarkerClick = (ann: Annotation) => {
     setActiveAnnotationId(ann.id)
-    setShowModal(true)
+    setShowDiscussion(true)
     annotation.markAsRead(ann.id)
   }
 
@@ -57,13 +78,13 @@ export function AreaMarker({ children, enabled = true, className, ...props }: Ar
       <div
         ref={containerRef}
         className={cn('relative select-none', className)}
-        onMouseDown={handleMouseDown}
+        onMouseDown={onMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={onMouseUp}
       >
         {children}
 
-        {drawing.currentRect && (
+        {drawing.currentRect && permissions.canCreate && (
           <div
             className="absolute border-2 border-dashed border-blue-400 bg-blue-400/10 pointer-events-none z-30"
             style={{
@@ -113,8 +134,30 @@ export function AreaMarker({ children, enabled = true, className, ...props }: Ar
       </div>
 
       <Modal
-        open={showModal && !!activeAnn}
-        onClose={() => setShowModal(false)}
+        open={showCreateInput}
+        onClose={handleCreateCancel}
+        title="添加区域批注"
+        width="420px"
+      >
+        <div className="p-4">
+          {pendingRect && (
+            <div className="mb-3 px-3 py-2 bg-blue-50 border-l-2 border-blue-300 rounded-r-md text-xs text-blue-700">
+              已选择区域 ({(pendingRect.width).toFixed(1)}% &times; {(pendingRect.height).toFixed(1)}%)
+            </div>
+          )}
+          <CommentInput
+            onSubmit={handleCreateSubmit}
+            onCancel={handleCreateCancel}
+            placeholder="输入批注内容..."
+            autoFocus
+            canUpload={false}
+          />
+        </div>
+      </Modal>
+
+      <Modal
+        open={showDiscussion && !!activeAnn}
+        onClose={() => setShowDiscussion(false)}
         title="区域批注详情"
         width="480px"
       >
@@ -124,9 +167,9 @@ export function AreaMarker({ children, enabled = true, className, ...props }: Ar
             users={annotation.users}
             currentUser={annotation.currentUser}
             permissions={annotation.permissions}
-            onAddComment={(annotationId, content) =>
-              annotation.addComment(annotationId, { content })
-            }
+            onAddComment={async (annotationId, content, parentId, files) => {
+              return await annotation.addComment(annotationId, { content, parentId, attachments: files })
+            }}
             onEditComment={annotation.updateComment}
             onDeleteComment={annotation.deleteComment}
             onToggleStatus={handleToggleStatus}

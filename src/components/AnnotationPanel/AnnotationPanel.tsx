@@ -140,7 +140,9 @@ export function AnnotationPanel(props: AnnotationKitProps) {
             users={users}
             currentUser={currentUser}
             permissions={permissions}
-            onAddComment={(annotationId, content) => addComment(annotationId, { content })}
+            onAddComment={async (annotationId, content, parentId, files) => {
+              return await addComment(annotationId, { content, parentId, attachments: files })
+            }}
             onEditComment={updateComment}
             onDeleteComment={deleteComment}
             onToggleStatus={handleToggleStatus}

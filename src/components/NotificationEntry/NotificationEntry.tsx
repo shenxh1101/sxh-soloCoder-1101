@@ -10,7 +10,7 @@ export function NotificationEntry(props: AnnotationKitProps) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const annotation = useAnnotation(props)
-  const { unreadCount, annotations, markAsRead, markAllAsRead, locateAnnotation, users } = annotation
+  const { unreadCount, annotations, markAsRead, markAllAsRead, locateAnnotation, users, targetId, unreadIds } = annotation
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -22,11 +22,11 @@ export function NotificationEntry(props: AnnotationKitProps) {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
 
-  const unreadAnnotations = annotations.filter((a) =>
-    annotation.unreadIds.includes(a.id)
+  const targetUnreadAnnotations = annotations.filter(
+    (a) => a.targetId === targetId && unreadIds.includes(a.id)
   )
 
-  const notifications = unreadAnnotations.map((a) => {
+  const notifications = targetUnreadAnnotations.map((a) => {
     const author = users.find((u) => u.id === a.createdBy)
     return {
       annotation: a,
@@ -34,6 +34,8 @@ export function NotificationEntry(props: AnnotationKitProps) {
       type: a.comments.length > 0 ? 'new_comment' : 'new_annotation' as const,
     }
   })
+
+  const targetUnreadCount = targetUnreadAnnotations.length
 
   const handleNotificationClick = (annotationId: string) => {
     locateAnnotation(annotationId)
@@ -52,14 +54,14 @@ export function NotificationEntry(props: AnnotationKitProps) {
         )}
       >
         <Bell className="w-5 h-5" />
-        <Badge count={unreadCount} className="absolute -top-0.5 -right-0.5" />
+        <Badge count={targetUnreadCount} className="absolute -top-0.5 -right-0.5" />
       </button>
 
       {open && (
         <div className="absolute right-0 top-full mt-2 w-80 bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
             <h3 className="text-[14px] font-semibold text-slate-900">通知</h3>
-            {unreadCount > 0 && (
+            {targetUnreadCount > 0 && (
               <button
                 onClick={markAllAsRead}
                 className="text-[11px] text-blue-600 hover:text-blue-700 font-medium"

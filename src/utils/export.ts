@@ -1,28 +1,33 @@
-import type { Annotation } from '@/types'
+import type { Annotation, User } from '@/types'
 
-function formatAnnotationForExport(annotation: Annotation) {
+function findUserName(userId: string, users: User[]): string {
+  return users.find((u) => u.id === userId)?.name || userId
+}
+
+function formatAnnotationForExport(annotation: Annotation, users: User[]) {
   return {
     id: annotation.id,
     content: annotation.content,
     status: annotation.status,
-    createdBy: annotation.createdBy,
+    createdBy: findUserName(annotation.createdBy, users),
     createdAt: annotation.createdAt,
     comments: annotation.comments.map((c) => ({
       id: c.id,
       content: c.content,
-      createdBy: c.createdBy,
+      createdBy: findUserName(c.createdBy, users),
       createdAt: c.createdAt,
       parentId: c.parentId || null,
-      attachments: c.attachments.map((a) => a.name),
+      parentComment: annotation.comments.find((p) => p.id === c.parentId)?.content || null,
+      attachments: c.attachments.map((a) => ({ name: a.name, url: a.url })),
     })),
   }
 }
 
-export function exportAsJson(annotations: Annotation[], targetId: string) {
+export function exportAsJson(annotations: Annotation[], targetId: string, users: User[]) {
   const data = {
     targetId,
     exportedAt: new Date().toISOString(),
-    annotations: annotations.map(formatAnnotationForExport),
+    annotations: annotations.map((a) => formatAnnotationForExport(a, users)),
   }
   const blob = new Blob([JSON.stringify(data, null, 2)], {
     type: 'application/json',
@@ -32,10 +37,18 @@ export function exportAsJson(annotations: Annotation[], targetId: string) {
 
 export function exportAsCsv(annotations: Annotation[], targetId: string) {
   const rows: string[][] = [
-    ['批注ID', '内容', '状态', '创建者', '创建时间', '评论数'],
+    ['批注ID', '内容', '状态', '创建者', '创建时间', '评论数', '评论详情'],
   ]
 
   annotations.forEach((a) => {
+    const commentDetails = a.comments
+      .map((c, i) => {
+        const parentInfo = c.parentId
+          ? `(回复 #${a.comments.findIndex((p) => p.id === c.parentId) + 1}) `
+          : ''
+        return `#${i + 1} ${parentInfo}${c.createdBy}: ${c.content.slice(0, 50)}`
+      })
+      .join(' | ')
     rows.push([
       a.id,
       a.content,
@@ -43,6 +56,7 @@ export function exportAsCsv(annotations: Annotation[], targetId: string) {
       a.createdBy,
       a.createdAt,
       String(a.comments.length),
+      commentDetails,
     ])
   })
 

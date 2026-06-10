@@ -9,6 +9,7 @@ interface CommentInputProps {
   placeholder?: string
   initialContent?: string
   autoFocus?: boolean
+  canUpload?: boolean
 }
 
 export function CommentInput({
@@ -17,6 +18,7 @@ export function CommentInput({
   placeholder = '输入评论内容...',
   initialContent = '',
   autoFocus = false,
+  canUpload = true,
 }: CommentInputProps) {
   const [content, setContent] = useState(initialContent)
   const [files, setFiles] = useState<File[]>([])
@@ -88,13 +90,15 @@ export function CommentInput({
             onChange={handleFileSelect}
             className="hidden"
           />
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <Paperclip className="w-3.5 h-3.5" />
-          </Button>
+          {canUpload && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Paperclip className="w-3.5 h-3.5" />
+            </Button>
+          )}
         </div>
         <div className="flex items-center gap-1.5">
           {onCancel && (

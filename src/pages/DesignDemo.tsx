@@ -22,7 +22,7 @@ export default function DesignDemo() {
   const [callbacks, setCallbacks] = useState<string[]>([])
 
   const logCallback = (name: string, ...args: unknown[]) => {
-    const log = `[${new Date().toLocaleTimeString()}] ${name}: ${JSON.stringify(args).slice(0, 100)}`
+    const log = `[${new Date().toLocaleTimeString()}] ${name}: ${JSON.stringify(args).slice(0, 120)}`
     setCallbacks((prev) => [log, ...prev].slice(0, 50))
   }
 
@@ -39,6 +39,10 @@ export default function DesignDemo() {
     onCommentAdd: (id: string, comment: unknown) => logCallback('onCommentAdd', id, comment),
     onCommentUpdate: (comment: unknown) => logCallback('onCommentUpdate', comment),
     onCommentDelete: (id: string) => logCallback('onCommentDelete', id),
+    onAttachmentUpload: async (file: File) => {
+      logCallback('onAttachmentUpload', { name: file.name, size: file.size, type: file.type })
+      return URL.createObjectURL(file)
+    },
   }
 
   return (

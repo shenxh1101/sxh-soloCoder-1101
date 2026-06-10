@@ -1,11 +1,10 @@
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import { Avatar } from '@/components/ui/Avatar'
-import { Button } from '@/components/ui/Button'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { CommentInput } from './CommentInput'
 import { CommentCard } from './CommentCard'
-import type { Annotation, User, Permission } from '@/types'
+import type { Annotation, User, Permission, Comment } from '@/types'
 import { MessageCircle, ChevronDown, ChevronUp } from 'lucide-react'
 
 interface DiscussionListProps {
@@ -14,7 +13,7 @@ interface DiscussionListProps {
   currentUser: User
   permissions: Permission
   className?: string
-  onAddComment: (annotationId: string, content: string, parentId?: string) => void
+  onAddComment: (annotationId: string, content: string, parentId?: string, files?: File[]) => Promise<Comment>
   onEditComment: (commentId: string, content: string) => void
   onDeleteComment: (commentId: string) => void
   onToggleStatus: (annotationId: string) => void
@@ -45,12 +44,16 @@ export function DiscussionList({
     ? permissions.canResolve
     : permissions.canResolve && permissions.isAdmin
 
-  const handleReply = (_commentId: string, content: string) => {
-    onAddComment(annotation.id, content)
+  const handleReply = (commentId: string, content: string, files: File[]) => {
+    onAddComment(annotation.id, content, commentId, files)
   }
 
-  const handleQuote = (_commentId: string, content: string) => {
-    onAddComment(annotation.id, content)
+  const handleQuote = (commentId: string, content: string, files: File[]) => {
+    onAddComment(annotation.id, content, commentId, files)
+  }
+
+  const handleTopLevelComment = (_content: string, files: File[]) => {
+    onAddComment(annotation.id, _content, undefined, files)
   }
 
   const handleTitleSave = () => {
@@ -60,6 +63,11 @@ export function DiscussionList({
     }
     setEditingTitle(false)
   }
+
+  const topLevelComments = annotation.comments.filter((c) => !c.parentId)
+
+  const getReplies = (parentId: string) =>
+    annotation.comments.filter((c) => c.parentId === parentId)
 
   return (
     <div className={cn('bg-white', className)}>
@@ -136,31 +144,57 @@ export function DiscussionList({
           {annotation.comments.length === 0 && (
             <p className="text-[13px] text-slate-400 text-center py-4">暂无评论，来说点什么吧</p>
           )}
-          {annotation.comments.map((comment) => (
-            <CommentCard
-              key={comment.id}
-              comment={comment}
-              users={users}
-              currentUserId={currentUser.id}
-              isAdmin={permissions.isAdmin}
-              canEdit={permissions.canEdit}
-              canDelete={permissions.canDelete}
-              onReply={handleReply}
-              onQuote={handleQuote}
-              onEdit={onEditComment}
-              onDelete={onDeleteComment}
-            />
-          ))}
+          {topLevelComments.map((comment) => {
+            const replies = getReplies(comment.id)
+            return (
+              <CommentCard
+                key={comment.id}
+                comment={comment}
+                users={users}
+                currentUserId={currentUser.id}
+                isAdmin={permissions.isAdmin}
+                canEdit={permissions.canEdit}
+                canDelete={permissions.canDelete}
+                onReply={handleReply}
+                onQuote={handleQuote}
+                onEdit={onEditComment}
+                onDelete={onDeleteComment}
+              >
+                {replies.length > 0 && (
+                  <div className="ml-10 border-l-2 border-slate-200 pl-3 mt-1 space-y-0">
+                    {replies.map((reply) => {
+                      const parentComment = annotation.comments.find((c) => c.id === reply.parentId)
+                      return (
+                        <CommentCard
+                          key={reply.id}
+                          comment={reply}
+                          users={users}
+                          currentUserId={currentUser.id}
+                          isAdmin={permissions.isAdmin}
+                          canEdit={permissions.canEdit}
+                          canDelete={permissions.canDelete}
+                          onReply={handleReply}
+                          onQuote={handleQuote}
+                          onEdit={onEditComment}
+                          onDelete={onDeleteComment}
+                          parentComment={parentComment}
+                        />
+                      )
+                    })}
+                  </div>
+                )}
+              </CommentCard>
+            )
+          })}
         </div>
       )}
 
       {expanded && permissions.canCreate && (
         <div className="px-4 py-3 border-t border-slate-100">
           <CommentInput
-            onSubmit={(_content, _files) => {
-              onAddComment(annotation.id, _content)
-            }}
+            onSubmit={handleTopLevelComment}
             placeholder="添加评论..."
+            canUpload={permissions.canUpload}
           />
         </div>
       )}

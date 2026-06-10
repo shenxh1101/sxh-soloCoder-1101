@@ -14,8 +14,9 @@ interface CommentCardProps {
   canEdit: boolean
   canDelete: boolean
   children?: ReactNode
-  onReply: (commentId: string, content: string) => void
-  onQuote: (commentId: string, content: string) => void
+  parentComment?: CommentType
+  onReply: (commentId: string, content: string, files: File[]) => void
+  onQuote: (commentId: string, content: string, files: File[]) => void
   onEdit: (commentId: string, content: string) => void
   onDelete: (commentId: string) => void
 }
@@ -28,6 +29,7 @@ export function CommentCard({
   canEdit,
   canDelete,
   children,
+  parentComment,
   onReply,
   onQuote,
   onEdit,
@@ -41,13 +43,13 @@ export function CommentCard({
   const isOwn = comment.createdBy === currentUserId
   const canModify = isOwn ? (canEdit || canDelete) : isAdmin
 
-  const handleReply = (content: string) => {
-    onReply(comment.id, content)
+  const handleReply = (content: string, files: File[]) => {
+    onReply(comment.id, content, files)
     setReplying(false)
   }
 
-  const handleQuote = (content: string) => {
-    onQuote(comment.id, content)
+  const handleQuote = (content: string, files: File[]) => {
+    onQuote(comment.id, content, files)
     setQuoting(false)
   }
 
@@ -71,8 +73,21 @@ export function CommentCard({
     )
   }
 
+  const parentAuthor = parentComment
+    ? users.find((u) => u.id === parentComment.createdBy)
+    : null
+
   return (
     <div className="group py-2">
+      {parentComment && parentAuthor && (
+        <div className="ml-10 mb-1 px-2.5 py-1 bg-slate-50 border-l-2 border-blue-300 rounded-r-md text-[11px] text-slate-500">
+          <span className="font-medium text-slate-600">{parentAuthor.name}</span>
+          <span className="mx-1">:</span>
+          {parentComment.content.length > 60
+            ? parentComment.content.slice(0, 60) + '...'
+            : parentComment.content}
+        </div>
+      )}
       <div className="flex gap-2.5">
         <Avatar user={author || { name: '?', avatar: '' }} size="sm" className="mt-0.5" />
         <div className="flex-1 min-w-0">
@@ -83,7 +98,7 @@ export function CommentCard({
             {comment.parentId && (
               <span className="text-[11px] text-slate-400 flex items-center gap-1">
                 <Quote className="w-3 h-3" />
-                引用
+                回复
               </span>
             )}
             <span className="text-[11px] text-slate-400">{timeStr}</span>
@@ -146,6 +161,7 @@ export function CommentCard({
             onCancel={() => setReplying(false)}
             placeholder={`回复 ${author?.name || '...'}...`}
             autoFocus
+            canUpload={true}
           />
         </div>
       )}
@@ -162,6 +178,7 @@ export function CommentCard({
             onCancel={() => setQuoting(false)}
             placeholder="输入引用评论..."
             autoFocus
+            canUpload={true}
           />
         </div>
       )}

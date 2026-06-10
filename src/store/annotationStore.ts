@@ -21,6 +21,7 @@ interface AnnotationState {
   addUnreadId: (id: string) => void
   removeUnreadId: (id: string) => void
   clearUnreadIds: () => void
+  clearUnreadIdsForTarget: (targetIds: string[]) => void
 }
 
 export const useAnnotationStore = create<AnnotationState>((set) => ({
@@ -98,4 +99,9 @@ export const useAnnotationStore = create<AnnotationState>((set) => ({
     })),
 
   clearUnreadIds: () => set({ unreadIds: [] }),
+
+  clearUnreadIdsForTarget: (annotationIds) =>
+    set((state) => ({
+      unreadIds: state.unreadIds.filter((uid) => !annotationIds.includes(uid)),
+    })),
 }))
