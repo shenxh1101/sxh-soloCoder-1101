@@ -10,6 +10,7 @@ import type {
   AnnotationStatus,
   Attachment,
   StatusChange,
+  ActivityLogEntry,
 } from '@/types'
 import { DEFAULT_PERMISSION } from '@/types'
 import { exportAsJson, exportAsCsv } from '@/utils/export'
@@ -125,6 +126,7 @@ export function useAnnotation(props: AnnotationKitProps) {
         assignee: data.assignee,
         dueDate: data.dueDate,
         statusHistory: [],
+        activityLog: [],
         textRange: data.textRange,
         areaRect: data.areaRect,
         comments: [],
@@ -139,12 +141,46 @@ export function useAnnotation(props: AnnotationKitProps) {
 
   const updateAnnotation = useCallback(
     (id: string, data: Partial<Annotation>) => {
-      const updated = { ...data, updatedAt: new Date().toISOString() }
+      const now = new Date().toISOString()
+      const updated = { ...data, updatedAt: now }
+      const prev = allAnnotations.find((a) => a.id === id)
+      if (prev) {
+        if ('assignee' in data && data.assignee !== prev.assignee) {
+          const entry: ActivityLogEntry = {
+            id: generateId(),
+            annotationId: id,
+            type: 'assignee_change',
+            userId: currentUser.id,
+            timestamp: now,
+            detail: data.assignee
+              ? `将处理人分配给 ${getUserById(data.assignee)?.name || data.assignee}`
+              : '清除了处理人',
+            fromValue: prev.assignee || '',
+            toValue: data.assignee || '',
+          }
+          store.pushActivityLog(id, entry)
+        }
+        if ('dueDate' in data && data.dueDate !== prev.dueDate) {
+          const entry: ActivityLogEntry = {
+            id: generateId(),
+            annotationId: id,
+            type: 'due_date_change',
+            userId: currentUser.id,
+            timestamp: now,
+            detail: data.dueDate
+              ? `将截止时间设为 ${new Date(data.dueDate).toLocaleDateString('zh-CN')}`
+              : '清除了截止时间',
+            fromValue: prev.dueDate || '',
+            toValue: data.dueDate || '',
+          }
+          store.pushActivityLog(id, entry)
+        }
+      }
       store.updateAnnotation(id, updated)
       const full = allAnnotations.find((a) => a.id === id)
       if (full) onAnnotationUpdate?.({ ...full, ...updated })
     },
-    [allAnnotations, store, onAnnotationUpdate]
+    [allAnnotations, store, onAnnotationUpdate, currentUser.id, getUserById]
   )
 
   const deleteAnnotation = useCallback(
@@ -171,7 +207,18 @@ export function useAnnotation(props: AnnotationKitProps) {
         updatedAt: now,
         statusHistory: [...(ann.statusHistory || []), record],
       }
+      const activityEntry: ActivityLogEntry = {
+        id: generateId(),
+        annotationId: id,
+        type: 'status_change',
+        userId: currentUser.id,
+        timestamp: now,
+        detail: `将状态从 ${ann.status === 'pending' ? '待处理' : '已解决'} 改为 ${newStatus === 'pending' ? '待处理' : '已解决'}`,
+        fromStatus: ann.status,
+        toStatus: newStatus,
+      }
       store.updateAnnotation(id, updated)
+      store.pushActivityLog(id, activityEntry)
       if (newStatus === 'resolved') {
         onAnnotationResolve?.(id)
       } else {
@@ -210,6 +257,17 @@ export function useAnnotation(props: AnnotationKitProps) {
         mentions: data.mentions,
       }
       store.addComment(annotationId, comment)
+      const activityEntry: ActivityLogEntry = {
+        id: generateId(),
+        annotationId,
+        type: 'comment_add',
+        userId: currentUser.id,
+        timestamp: now,
+        detail: '添加了一条评论',
+        commentId: comment.id,
+        commentContent: data.content,
+      }
+      store.pushActivityLog(annotationId, activityEntry)
       onCommentAdd?.(annotationId, comment)
       return comment
     },
@@ -223,17 +281,47 @@ export function useAnnotation(props: AnnotationKitProps) {
         a.comments.some((c) => c.id === commentId)
       )
       const comment = annotation?.comments.find((c) => c.id === commentId)
-      if (comment) onCommentUpdate?.({ ...comment, content })
+      if (comment) {
+        onCommentUpdate?.({ ...comment, content })
+        const activityEntry: ActivityLogEntry = {
+          id: generateId(),
+          annotationId: comment.annotationId,
+          type: 'comment_edit',
+          userId: currentUser.id,
+          timestamp: new Date().toISOString(),
+          detail: '编辑了一条评论',
+          commentId: comment.id,
+          commentContent: content,
+        }
+        store.pushActivityLog(comment.annotationId, activityEntry)
+      }
     },
-    [allAnnotations, store, onCommentUpdate]
+    [allAnnotations, store, onCommentUpdate, currentUser.id]
   )
 
   const deleteComment = useCallback(
     (commentId: string) => {
+      const annotation = allAnnotations.find((a) =>
+        a.comments.some((c) => c.id === commentId)
+      )
+      const comment = annotation?.comments.find((c) => c.id === commentId)
       store.removeComment(commentId)
+      if (comment && annotation) {
+        const activityEntry: ActivityLogEntry = {
+          id: generateId(),
+          annotationId: annotation.id,
+          type: 'comment_delete',
+          userId: currentUser.id,
+          timestamp: new Date().toISOString(),
+          detail: '删除了一条评论',
+          commentId: comment.id,
+          commentContent: comment.content,
+        }
+        store.pushActivityLog(annotation.id, activityEntry)
+      }
       onCommentDelete?.(commentId)
     },
-    [store, onCommentDelete]
+    [allAnnotations, store, onCommentDelete, currentUser.id]
   )
 
   const filterByStatus = useCallback(
@@ -297,7 +385,13 @@ export function useAnnotation(props: AnnotationKitProps) {
   const markAllAsRead = useCallback(() => {
     const targetAnnotationIds = filteredAnnotations.map((a) => a.id)
     store.clearUnreadIdsForTarget(targetAnnotationIds)
-  }, [store, filteredAnnotations])
+    const currentMentionIds = allAnnotations
+      .filter((a) => a.targetId === targetId)
+      .flatMap((a) =>
+        a.comments.filter((c) => c.mentions?.includes(currentUser.id)).map((c) => c.id)
+      )
+    store.markAllMentionsAsRead(currentMentionIds)
+  }, [store, filteredAnnotations, allAnnotations, targetId, currentUser.id])
 
   const getMentionNotifications = useCallback(
     (): { annotationId: string; commentId: string; authorName: string; content: string; createdAt: string }[] => {
@@ -354,6 +448,7 @@ export function useAnnotation(props: AnnotationKitProps) {
     annotations: allAnnotations,
     filteredAnnotations,
     unreadIds: store.unreadIds,
+    readMentionIds: store.readMentionIds,
     unreadCount,
     getUserById,
     createAnnotation,
@@ -372,6 +467,7 @@ export function useAnnotation(props: AnnotationKitProps) {
     locateAnnotation,
     markAsRead,
     markAllAsRead,
+    markMentionAsRead: store.markMentionAsRead,
     getMentionNotifications,
     exportDiscussions,
     uploadAttachment,

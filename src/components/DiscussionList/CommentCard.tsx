@@ -177,6 +177,26 @@ export function CommentCard({
               )}
             </div>
           )}
+          {!canCreate && isOwn && (canEdit || (canModify && canDelete)) && (
+            <div className="flex items-center gap-0.5 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+              {isOwn && canEdit && (
+                <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
+                  <Pencil className="w-3.5 h-3.5" />
+                  编辑
+                </Button>
+              )}
+              {canModify && canDelete && (
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={() => onDelete(comment.id)}
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  删除
+                </Button>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

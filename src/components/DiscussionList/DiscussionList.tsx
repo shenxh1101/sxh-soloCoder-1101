@@ -6,8 +6,8 @@ import { StatusBadge } from '@/components/ui/StatusBadge'
 import { Dropdown } from '@/components/ui/Dropdown'
 import { CommentInput } from './CommentInput'
 import { CommentCard } from './CommentCard'
-import type { Annotation, User, Permission, Comment } from '@/types'
-import { MessageCircle, ChevronDown, ChevronUp, UserCheck, Calendar, Clock, GitBranch } from 'lucide-react'
+import type { Annotation, User, Permission, Comment, ActivityLogEntry } from '@/types'
+import { MessageCircle, ChevronDown, ChevronUp, UserCheck, Calendar, Clock, GitBranch, MessageSquare, Pencil, Trash2, UserPlus } from 'lucide-react'
 
 interface DiscussionListProps {
   annotation: Annotation
@@ -114,8 +114,6 @@ export function DiscussionList({
 
   const getReplies = (parentId: string) =>
     annotation.comments.filter((c) => c.parentId === parentId)
-
-  const statusHistoryRecords = annotation.statusHistory || []
 
   return (
     <div className={cn('bg-white', className)}>
@@ -332,34 +330,16 @@ export function DiscussionList({
         </div>
       )}
 
-      {expanded && statusHistoryRecords.length > 0 && (
+      {expanded && (
         <div className="px-4 py-3 border-t border-slate-100">
           <div className="flex items-center gap-1.5 mb-2">
             <GitBranch className="w-3.5 h-3.5 text-slate-400" />
-            <span className="text-[11px] font-medium text-slate-500 uppercase">状态流转</span>
+            <span className="text-[11px] font-medium text-slate-500 uppercase">操作记录</span>
           </div>
-          <div className="space-y-2">
-            {statusHistoryRecords.map((record, i) => {
-              const changer = users.find((u) => u.id === record.changedBy)
-              return (
-                <div key={i} className="flex items-center gap-2 text-[11px]">
-                  <div className="w-1.5 h-1.5 rounded-full bg-slate-300" />
-                  <span className="text-slate-500">
-                    <span className="font-medium text-slate-700">{changer?.name || record.changedBy}</span>
-                    {' 将状态从 '}
-                    <span className={cn('font-medium', record.from === 'pending' ? 'text-amber-600' : 'text-emerald-600')}>
-                      {record.from === 'pending' ? '待处理' : '已解决'}
-                    </span>
-                    {' 改为 '}
-                    <span className={cn('font-medium', record.to === 'pending' ? 'text-amber-600' : 'text-emerald-600')}>
-                      {record.to === 'pending' ? '待处理' : '已解决'}
-                    </span>
-                  </span>
-                  <span className="text-slate-300">{formatTime(record.changedAt)}</span>
-                </div>
-              )
-            })}
-          </div>
+          <ActivityTimeline
+            annotation={annotation}
+            users={users}
+          />
         </div>
       )}
     </div>
@@ -379,4 +359,76 @@ function formatTime(dateStr: string): string {
   if (hours < 24) return `${hours}小时前`
   if (days < 7) return `${days}天前`
   return date.toLocaleDateString('zh-CN')
+}
+
+const activityIcons: Record<ActivityLogEntry['type'], typeof MessageSquare> = {
+  comment_add: MessageSquare,
+  comment_edit: Pencil,
+  comment_delete: Trash2,
+  status_change: GitBranch,
+  assignee_change: UserPlus,
+  due_date_change: Calendar,
+}
+
+const activityColors: Record<ActivityLogEntry['type'], string> = {
+  comment_add: 'bg-blue-100 text-blue-600',
+  comment_edit: 'bg-amber-100 text-amber-600',
+  comment_delete: 'bg-red-100 text-red-600',
+  status_change: 'bg-emerald-100 text-emerald-600',
+  assignee_change: 'bg-purple-100 text-purple-600',
+  due_date_change: 'bg-orange-100 text-orange-600',
+}
+
+interface ActivityTimelineProps {
+  annotation: Annotation
+  users: User[]
+}
+
+function ActivityTimeline({ annotation, users }: ActivityTimelineProps) {
+  const allEntries = [...(annotation.activityLog || [])].sort(
+    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+  )
+
+  if (allEntries.length === 0) {
+    return (
+      <p className="text-[11px] text-slate-400 text-center py-3">暂无操作记录</p>
+    )
+  }
+
+  return (
+    <div className="space-y-2">
+      {allEntries.map((entry) => {
+        const operator = users.find((u) => u.id === entry.userId)
+        const Icon = activityIcons[entry.type] || MessageSquare
+
+        return (
+          <div key={entry.id} className="flex items-start gap-2.5 text-[11px] group">
+            <div
+              className={cn(
+                'w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5',
+                activityColors[entry.type]
+              )}
+            >
+              <Icon className="w-3 h-3" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <span className="text-slate-600">
+                <span className="font-medium text-slate-700">{operator?.name || entry.userId}</span>
+                {' '}
+                {entry.detail}
+              </span>
+              {entry.commentContent && (
+                <p className="text-slate-400 truncate mt-0.5">
+                  {entry.commentContent.length > 60
+                    ? entry.commentContent.slice(0, 60) + '...'
+                    : entry.commentContent}
+                </p>
+              )}
+              <span className="text-slate-300">{formatTime(entry.timestamp)}</span>
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
 }

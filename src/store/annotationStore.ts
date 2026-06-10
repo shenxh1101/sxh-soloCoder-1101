@@ -1,9 +1,10 @@
 import { create } from 'zustand'
-import type { Annotation, AnnotationStatus, Comment } from '@/types'
+import type { Annotation, AnnotationStatus, Comment, ActivityLogEntry } from '@/types'
 
 interface AnnotationState {
   annotations: Annotation[]
   unreadIds: string[]
+  readMentionIds: string[]
   filterStatus: AnnotationStatus | 'all'
   filterUserIds: string[]
   filterAssignee: string | 'all'
@@ -18,6 +19,7 @@ interface AnnotationState {
   addComment: (annotationId: string, comment: Comment) => void
   updateComment: (commentId: string, content: string) => void
   removeComment: (commentId: string) => void
+  pushActivityLog: (annotationId: string, entry: ActivityLogEntry) => void
   setFilterStatus: (status: AnnotationStatus | 'all') => void
   setFilterUserIds: (userIds: string[]) => void
   setFilterAssignee: (assignee: string | 'all') => void
@@ -28,11 +30,14 @@ interface AnnotationState {
   clearUnreadIds: () => void
   clearUnreadIdsForTarget: (targetIds: string[]) => void
   setNavigateToComment: (target: { annotationId: string; commentId: string } | null) => void
+  markMentionAsRead: (commentId: string) => void
+  markAllMentionsAsRead: (commentIds: string[]) => void
 }
 
 export const useAnnotationStore = create<AnnotationState>((set) => ({
   annotations: [],
   unreadIds: [],
+  readMentionIds: [],
   filterStatus: 'all',
   filterUserIds: [],
   filterAssignee: 'all',
@@ -91,6 +96,15 @@ export const useAnnotationStore = create<AnnotationState>((set) => ({
       })),
     })),
 
+  pushActivityLog: (annotationId, entry) =>
+    set((state) => ({
+      annotations: state.annotations.map((a) =>
+        a.id === annotationId
+          ? { ...a, activityLog: [...(a.activityLog || []), entry] }
+          : a
+      ),
+    })),
+
   setFilterStatus: (status) => set({ filterStatus: status }),
   setFilterUserIds: (userIds) => set({ filterUserIds: userIds }),
   setFilterAssignee: (assignee) => set({ filterAssignee: assignee }),
@@ -117,4 +131,17 @@ export const useAnnotationStore = create<AnnotationState>((set) => ({
     })),
 
   setNavigateToComment: (target) => set({ navigateToComment: target }),
+
+  markMentionAsRead: (commentId) =>
+    set((state) => ({
+      readMentionIds: state.readMentionIds.includes(commentId)
+        ? state.readMentionIds
+        : [...state.readMentionIds, commentId],
+    })),
+
+  markAllMentionsAsRead: (commentIds) =>
+    set((state) => {
+      const newIds = commentIds.filter((id) => !state.readMentionIds.includes(id))
+      return { readMentionIds: [...state.readMentionIds, ...newIds] }
+    }),
 }))

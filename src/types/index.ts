@@ -48,6 +48,29 @@ export interface Comment {
   mentions?: string[]
 }
 
+export type ActivityType =
+  | 'comment_add'
+  | 'comment_edit'
+  | 'comment_delete'
+  | 'status_change'
+  | 'assignee_change'
+  | 'due_date_change'
+
+export interface ActivityLogEntry {
+  id: string
+  annotationId: string
+  type: ActivityType
+  userId: string
+  timestamp: string
+  detail: string
+  commentId?: string
+  commentContent?: string
+  fromStatus?: AnnotationStatus
+  toStatus?: AnnotationStatus
+  fromValue?: string
+  toValue?: string
+}
+
 export interface Annotation {
   id: string
   targetId: string
@@ -60,6 +83,7 @@ export interface Annotation {
   assignee?: string
   dueDate?: string
   statusHistory: StatusChange[]
+  activityLog: ActivityLogEntry[]
   textRange?: TextRange
   areaRect?: AreaRect
   comments: Comment[]

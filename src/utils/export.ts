@@ -19,6 +19,18 @@ function formatAnnotationForExport(annotation: Annotation, users: User[]) {
       changedBy: findUserName(r.changedBy, users),
       changedAt: r.changedAt,
     })),
+    activityLog: (annotation.activityLog || []).map((e) => ({
+      type: e.type,
+      userId: findUserName(e.userId, users),
+      timestamp: e.timestamp,
+      detail: e.detail,
+      commentId: e.commentId || null,
+      commentContent: e.commentContent || null,
+      fromStatus: e.fromStatus || null,
+      toStatus: e.toStatus || null,
+      fromValue: e.fromValue || null,
+      toValue: e.toValue || null,
+    })),
     comments: annotation.comments.map((c) => ({
       id: c.id,
       content: c.content,
@@ -46,10 +58,17 @@ export function exportAsJson(annotations: Annotation[], targetId: string, users:
 
 export function exportAsCsv(annotations: Annotation[], targetId: string, users: User[]) {
   const rows: string[][] = [
-    ['批注ID', '内容', '状态', '创建者', '处理人', '截止日', '创建时间', '评论数', '状态变更次数', '评论详情'],
+    ['批注ID', '内容', '状态', '创建者', '处理人', '截止日', '创建时间', '评论数', '状态变更次数', '操作记录数', '操作记录详情', '评论详情'],
   ]
 
   annotations.forEach((a) => {
+    const activityDetails = (a.activityLog || [])
+      .map((e) => {
+        const userName = findUserName(e.userId, users)
+        return `${e.type}: ${userName} ${e.detail}`
+      })
+      .join(' | ')
+
     const commentDetails = a.comments
       .map((c, i) => {
         const parentInfo = c.parentId
@@ -71,6 +90,8 @@ export function exportAsCsv(annotations: Annotation[], targetId: string, users: 
       a.createdAt,
       String(a.comments.length),
       String((a.statusHistory || []).length),
+      String((a.activityLog || []).length),
+      activityDetails,
       commentDetails,
     ])
   })
